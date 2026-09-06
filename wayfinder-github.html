@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wayfinder (standalone)</title>
+<style>
+  :root{
+    --paper:#15181C;
+    --paper-raised:#1F2329;
+    --ink:#EEF0EC;
+    --ink-soft:#8D969D;
+    --line:#33383E;
+    --dawn:#F2A93B;       /* Primary tier */
+    --dawn-soft:#3B2E15;
+    --dusk:#33D6A6;       /* Secondary tier */
+    --dusk-soft:#12332A;
+    --night:#A78BFA;      /* Tertiary tier */
+    --night-soft:#2A2340;
+    --alarm:#FF6B4A;
+    --alarm-soft:#3A1E17;
+    --alarm-text:#FFB39C;
+    --serif: Iowan Old Style, Sitka Text, Palatino Linotype, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); line-height:1.5; font-size:15px;
+    padding: 28px 20px 80px;
+  }
+  .wrap{max-width:960px; margin:0 auto;}
+  h1,h2,h3{font-family:var(--serif); font-weight:600; margin:0;}
+  header.top{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap; gap:10px;}
+  header.top h1{font-size:30px; letter-spacing:0.2px; font-weight:700;}
+  header.top .sub{color:var(--ink-soft); font-size:13.5px; margin-top:4px;}
+  .today-pill{font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); background:var(--paper-raised); border:1px solid var(--line); padding:6px 12px; border-radius:100px;}
+
+  .banner{
+    background:var(--alarm-soft); border:1px solid var(--alarm); color:var(--alarm-text);
+    border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:13.5px;
+  }
+  .banner strong{display:block; font-family:var(--serif); font-size:15px; margin-bottom:4px; color:var(--alarm-text);}
+  .banner ul{margin:6px 0 0; padding-left:18px;}
+  .banner li{margin-bottom:3px;}
+
+  .checkin{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  .checkin .msg{font-size:13.5px; color:var(--ink-soft);}
+  .sync-status{font-size:11.5px; color:var(--ink-soft); margin-top:-12px; margin-bottom:20px; font-family:var(--mono);}
+  .checkin .msg b{color:var(--ink); font-weight:600;}
+
+  .layout{display:grid; grid-template-columns: 220px 1fr; gap:26px;}
+  @media (max-width: 760px){ .layout{grid-template-columns: 1fr;} }
+
+  .rail{position:relative; padding-left:4px;}
+  .rail h3{font-size:13px; text-transform:none; color:var(--ink-soft); margin-bottom:14px; font-family:var(--sans); font-weight:600;}
+  .arc{position:relative; margin-left:26px; border-left:2px solid var(--line); padding-left:16px;}
+  .arc-block{position:relative; padding:9px 0; margin-bottom:2px;}
+  .arc-block .dot{position:absolute; left:-21px; top:12px; width:9px; height:9px; border-radius:50%; background:var(--ink-soft);}
+  .arc-block.high .dot{background:var(--dawn);}
+  .arc-block.low .dot{background:var(--night);}
+  .arc-block.fixed .dot{background:var(--dusk);}
+  .arc-block .time{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); display:block;}
+  .arc-block .label{font-size:13px; margin-top:1px;}
+
+  .tiers{display:flex; flex-direction:column; gap:22px;}
+  .tier-block h2{font-size:17px; display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .tier-swatch{width:10px; height:10px; border-radius:2px; display:inline-block;}
+  .tier-block.Primary .tier-swatch{background:var(--dawn);}
+  .tier-block.Secondary .tier-swatch{background:var(--dusk);}
+  .tier-block.Tertiary .tier-swatch{background:var(--night);}
+  .tier-note{font-size:12px; color:var(--ink-soft); margin-left:auto; font-weight:normal; font-family:var(--sans);}
+
+  .goal-card{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; margin-bottom:10px;
+  }
+  .goal-card .row1{display:flex; justify-content:space-between; gap:10px; align-items:baseline;}
+  .goal-card h4{font-family:var(--serif); font-size:16px; font-weight:600; margin:0;}
+  .goal-card .status-done{color:var(--dusk); font-size:12.5px; font-family:var(--mono);}
+  .goal-card .next{font-size:13.5px; margin-top:6px;}
+  .goal-card .meta{font-size:12px; color:var(--ink-soft); margin-top:8px; font-family:var(--mono); display:flex; gap:14px; flex-wrap:wrap;}
+  .goal-card .actions{margin-top:10px; display:flex; gap:8px;}
+  .goal-card.completed{opacity:0.55;}
+
+  button{
+    font-family:var(--sans); font-size:13px; font-weight:600; border-radius:7px; border:1px solid var(--line);
+    background:var(--paper-raised); color:var(--ink); padding:7px 12px; cursor:pointer;
+  }
+  button:hover{border-color:var(--ink-soft);}
+  button.primary-btn{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+  button.primary-btn:hover{opacity:0.88;}
+  button.text-btn{border:none; background:none; color:var(--ink-soft); padding:6px 4px; text-decoration:underline;}
+
+  .empty{color:var(--ink-soft); font-size:13.5px; border:1px dashed var(--line); border-radius:10px; padding:16px; text-align:center;}
+
+  .add-row{margin-top:18px;}
+
+  .modal-back{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .modal{background:var(--paper-raised); border-radius:12px; padding:24px; max-width:460px; width:100%; max-height:86vh; overflow:auto;}
+  .modal h2{font-size:19px; margin-bottom:14px;}
+  .field{margin-bottom:13px;}
+  .field label{display:block; font-size:12.5px; color:var(--ink-soft); margin-bottom:4px;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-family:var(--sans); font-size:13.5px; background:var(--paper);
+  }
+  .field textarea{min-height:80px; resize:vertical;}
+  .modal .btn-row{display:flex; justify-content:flex-end; gap:8px; margin-top:16px;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .footer-note{margin-top:34px; font-size:12px; color:var(--ink-soft); text-align:center;}
+  .link-btn{background:none;border:none;color:var(--ink-soft);text-decoration:underline;cursor:pointer;font-size:12px;padding:0;}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">Loading Wayfinder…</div>
+
+<script>
+(function(){
+  const STORAGE_KEY_PROFILE = "wayfinder:profile";
+  const STORAGE_KEY_GOALS = "wayfinder:goals";
+  const STORAGE_KEY_META = "wayfinder:meta";
+  const BRIDGE_URL = "http://127.0.0.1:8765/data";
+
+  // --- GitHub / standalone build ---
+  // This version runs outside Claude.ai, so the artifact-only
+  // `window.storage` API isn't available. This shim gives the same
+  // get/set interface but backs it with the browser's own localStorage,
+  // so data persists per-browser, per-device, on the machine visiting
+  // the page. Nothing else in the app below needed to change.
+  const storage = {
+    async get(key){
+      const raw = localStorage.getItem("wf:"+key);
+      if(raw === null) return null;
+      return {key, value: raw, shared: false};
+    },
+    async set(key, value){
+      localStorage.setItem("wf:"+key, value);
+      return {key, value, shared: false};
+    },
+    async delete(key){
+      const existed = localStorage.getItem("wf:"+key) !== null;
+      localStorage.removeItem("wf:"+key);
+      return {key, deleted: existed, shared: false};
+    }
+  };
+
+  const DEFAULT_PROFILE = {
+    wake:"06:00", sleep:"23:30",
+    meals:{breakfast:"06:15", lunch:"14:30", dinner:"22:00"},
+    highEnergyStart:"07:00", highEnergyEnd:"13:00", postLunchDip:true,
+    fixedCommitments:[
+      {name:"Exercise / Physiotherapy", start:"06:30", end:"07:00"},
+      {name:"Learning / Upskilling (AM)", start:"08:00", end:"09:30"},
+      {name:"Learning / Upskilling (PM)", start:"22:30", end:"23:30"}
+    ],
+    workingHours:{start:"10:30", end:"21:30", days:"weekdays"},
+    reminderRules:{Primary:"Multiple times daily, before each task starts", Secondary:"Daily", Tertiary:"Weekends only"},
+    extraReminders:[{time:"07:00", days:"weekdays"},{time:"22:30", days:"weekdays"}],
+    conflictRule:"higher-bumps-lower",
+    rescheduleTolerance:"strict",
+    checkin:"daily"
+  };
+
+  const DEFAULT_GOALS = [
+    {
+      goal_id: cryptoId(), goal_name:"Learn SQL for data analysis",
+      tier:"Primary", status:"active",
+      framework:["Set up practice DB & basic SELECT/WHERE","Aggregations & GROUP BY","Joins (inner/outer/self)","Subqueries & CTEs","Window functions","Query optimization basics","Capstone: analyze a real dataset end-to-end"],
+      current_step_index:2,
+      preferred_time_block:{start:"07:15", end:"08:00"},
+      milestone_log:[
+        {step:0, completed_ts:"2026-08-10"},
+        {step:1, completed_ts:"2026-08-16"}
+      ],
+      last_updated_ts: new Date().toISOString()
+    }
+  ];
+
+  function cryptoId(){ return Math.random().toString(36).slice(2,10); }
+
+  function pad(n){ return n<10 ? "0"+n : ""+n; }
+  function toMinutes(t){ const [h,m]=t.split(":").map(Number); return h*60+m; }
+  function fromMinutes(mins){ mins=((mins%1440)+1440)%1440; const h=Math.floor(mins/60), m=mins%60; return pad(h)+":"+pad(m); }
+  function fmt12(t){
+    const [h,m]=t.split(":").map(Number);
+    const period = h>=12 ? "PM":"AM";
+    let hh = h%12; if(hh===0) hh=12;
+    return hh+":"+pad(m)+" "+period;
+  }
+  function overlaps(aS,aE,bS,bE){ return toMinutes(aS) < toMinutes(bE) && toMinutes(bS) < toMinutes(aE); }
+  function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function isWeekend(){ const d=new Date().getDay(); return d===0 || d===6; }
+
+  async function loadState(){
+    let profile, goals, meta;
+    try{
+      const p = await storage.get("profile-key-wf");
+      profile = p ? JSON.parse(p.value) : null;
+    }catch(e){ profile = null; }
+    if(!profile){
+      profile = DEFAULT_PROFILE;
+      await safeSet("profile-key-wf", profile);
+    }
+    try{
+      const g = await storage.get("goals-key-wf");
+      goals = g ? JSON.parse(g.value) : null;
+    }catch(e){ goals = null; }
+    if(!goals){
+      goals = DEFAULT_GOALS;
+      await safeSet("goals-key-wf", goals);
+    }
+    try{
+      const m = await storage.get("meta-key-wf");
+      meta = m ? JSON.parse(m.value) : null;
+    }catch(e){ meta = null; }
+    if(!meta){
+      meta = {lastCheckin:null, savedAt:null};
+      await safeSet("meta-key-wf", meta);
+    }
+    return {profile, goals, meta};
+  }
+  async function safeSet(key, obj){
+    try{ await storage.set(key, JSON.stringify(obj), false); }
+    catch(e){ console.error("storage set failed", key, e); }
+  }
+
+  let STATE = {profile:null, goals:null, meta:null};
+
+  function energyWindows(profile){
+    const lunch = profile.meals.lunch;
+    const dipStart = fromMinutes(toMinutes(lunch)+45);
+    const dipEnd = fromMinutes(toMinutes(lunch)+45+90);
+    const windows = [
+      {start:profile.highEnergyStart, end:profile.highEnergyEnd, level:"high", label:"High energy"},
+    ];
+    if(profile.postLunchDip){
+      windows.push({start:dipStart, end:dipEnd, level:"low", label:"Post-lunch dip"});
+    }
+    windows.sort((a,b)=>toMinutes(a.start)-toMinutes(b.start));
+    return windows;
+  }
+
+  function buildDayBlocks(profile){
+    const blocks = [];
+    blocks.push({start:profile.wake, end:profile.wake, kind:"marker", label:"Wake"});
+    Object.entries(profile.meals).forEach(([k,t])=>{
+      blocks.push({start:t, end:fromMinutes(toMinutes(t)+30), kind:"meal", label:k[0].toUpperCase()+k.slice(1)});
+    });
+    profile.fixedCommitments.forEach(f=>{
+      blocks.push({start:f.start, end:f.end, kind:"fixed", label:f.name});
+    });
+    energyWindows(profile).forEach(w=>{
+      blocks.push({start:w.start, end:w.end, kind:w.level, label:w.label});
+    });
+    blocks.push({start:profile.sleep, end:profile.sleep, kind:"marker", label:"Sleep"});
+    blocks.sort((a,b)=>toMinutes(a.start)-toMinutes(b.start));
+    return blocks;
+  }
+
+  function checkConflicts(profile, goals){
+    const issues = [];
+    const fixed = profile.fixedCommitments;
+
+    for(let i=0;i<fixed.length;i++){
+      for(let j=i+1;j<fixed.length;j++){
+        if(overlaps(fixed[i].start, fixed[i].end, fixed[j].start, fixed[j].end)){
+          issues.push(fixed[i].name+" overlaps with "+fixed[j].name+".");
+        }
+      }
+    }
+
+    const sleepBufferStart = fromMinutes(toMinutes(profile.sleep) - 60);
+    fixed.forEach(f=>{
+      if(overlaps(f.start, f.end, sleepBufferStart, profile.sleep)){
+        issues.push(f.name+" runs within an hour of sleep ("+fmt12(profile.sleep)+") — consider moving it earlier.");
+      }
+    });
+
+    Object.entries(profile.meals).forEach(([mName,mTime])=>{
+      const bufStart = mTime;
+      const bufEnd = fromMinutes(toMinutes(mTime)+45);
+      fixed.forEach(f=>{
+        if(overlaps(f.start,f.end,bufStart,bufEnd)){
+          issues.push(f.name+" sits inside the 45-min buffer after "+mName+".");
+        }
+      });
+    });
+
+    if(!isWeekend()){
+      const wh = profile.workingHours;
+      goals.forEach(g=>{
+        if(g.status!=="active" || !g.preferred_time_block) return;
+        const pb = g.preferred_time_block;
+        if(overlaps(pb.start, pb.end, wh.start, wh.end)){
+          issues.push('"'+g.goal_name+'" ('+g.tier+') is scheduled '+fmt12(pb.start)+"–"+fmt12(pb.end)+", inside today's working-hours no-go window.");
+        }
+      });
+    }
+
+    const active = goals.filter(g=>g.status==="active" && g.preferred_time_block);
+    for(let i=0;i<active.length;i++){
+      for(let j=i+1;j<active.length;j++){
+        const a=active[i], b=active[j];
+        if(overlaps(a.preferred_time_block.start,a.preferred_time_block.end,b.preferred_time_block.start,b.preferred_time_block.end)){
+          const tierRank = {Primary:0, Secondary:1, Tertiary:2};
+          const loser = tierRank[a.tier] <= tierRank[b.tier] ? b : a;
+          issues.push('"'+a.goal_name+'" and "'+b.goal_name+'" overlap. Per your rule, "'+loser.goal_name+'" ('+loser.tier+') should move.');
+        }
+      }
+    }
+    return issues;
+  }
+
+  function suggestWindow(tier, profile, goals){
+    const windows = energyWindows(profile);
+    const preferredLevel = tier==="Primary" ? "high" : (tier==="Tertiary" ? "low" : "high");
+    const candidates = windows.filter(w=>w.level===preferredLevel).concat(windows);
+    for(const w of candidates){
+      const busy = goals.some(g=>g.status==="active" && g.preferred_time_block &&
+        overlaps(g.preferred_time_block.start, g.preferred_time_block.end, w.start, w.end));
+      if(!busy) return {start:w.start, end:fromMinutes(toMinutes(w.start)+45)};
+    }
+    return null;
+  }
+
+  function render(){
+    const {profile, goals, meta} = STATE;
+    const issues = checkConflicts(profile, goals);
+    const dayBlocks = buildDayBlocks(profile);
+    const today = todayStr();
+    const checkinDone = meta.lastCheckin === today;
+
+    const app = document.getElementById("app");
+    app.innerHTML = "";
+
+    const header = el("header", "top", `
+      <div>
+        <h1>Wayfinder</h1>
+        <div class="sub">Your goals, your rhythm — carried between sessions automatically.</div>
+      </div>
+      <div class="today-pill">${new Date().toLocaleDateString(undefined,{weekday:'long', month:'short', day:'numeric'})}</div>
+    `);
+    app.appendChild(header);
+
+    if(issues.length){
+      const b = el("div","banner", `<strong>Flagged today</strong><ul>${issues.map(i=>`<li>${escapeHtml(i)}</li>`).join("")}</ul>`);
+      app.appendChild(b);
+    }
+
+    const checkin = el("div","checkin", `
+      <div class="msg">${checkinDone ? "<b>Check-in done</b> for today." : "<b>Daily check-in</b> — anything move, get done, or need rescheduling?"}</div>
+      <div>${checkinDone ? '' : '<button id="checkinBtn" class="primary-btn">Mark check-in done</button>'} <button id="syncBtn" class="text-btn">Sync</button> <button id="profileBtn" class="text-btn">Edit onboarding profile</button></div>
+    `);
+    app.appendChild(checkin);
+    const syncStatus = el("div","sync-status", meta.savedAt ? "Last synced "+new Date(meta.savedAt).toLocaleString() : "Not synced yet — click Sync once the local bridge is running.");
+    app.appendChild(syncStatus);
+
+    const layout = el("div","layout");
+    layout.appendChild(renderRail(dayBlocks, profile));
+    layout.appendChild(renderTiers(goals, profile));
+    app.appendChild(layout);
+
+    const footer = el("div","footer-note", "Wayfinder can't send push notifications or run in the background — set an external alarm for 7:00 AM and 10:30 PM on weekdays to remember to open this. This standalone build saves data in this browser only (localStorage) — use Sync with the local bridge to also back it up to a file on disk.");
+    app.appendChild(footer);
+
+    document.getElementById("checkinBtn") && document.getElementById("checkinBtn").addEventListener("click", async ()=>{
+      STATE.meta.lastCheckin = today;
+      await safeSet("meta-key-wf", STATE.meta);
+      render();
+    });
+    document.getElementById("syncBtn").addEventListener("click", syncWithBridge);
+    document.getElementById("profileBtn").addEventListener("click", openProfileModal);
+  }
+
+  async function syncWithBridge(){
+    const syncBtn = document.getElementById("syncBtn");
+    if(syncBtn){ syncBtn.textContent = "Syncing…"; syncBtn.disabled = true; }
+    try{
+      const res = await fetch(BRIDGE_URL, {method:"GET"});
+      if(!res.ok) throw new Error("bridge responded with an error");
+      const remote = await res.json();
+
+      const localSavedAt = STATE.meta.savedAt;
+      const remoteHasData = remote && remote.savedAt;
+
+      if(remoteHasData && (!localSavedAt || remote.savedAt > localSavedAt)){
+        STATE.profile = remote.profile || STATE.profile;
+        STATE.goals = remote.goals || STATE.goals;
+        STATE.meta = remote.meta || STATE.meta;
+        STATE.meta.savedAt = remote.savedAt;
+        await safeSet("profile-key-wf", STATE.profile);
+        await safeSet("goals-key-wf", STATE.goals);
+        await safeSet("meta-key-wf", STATE.meta);
+        alert("Imported the newer data saved on disk.");
+      } else {
+        const savedAt = new Date().toISOString();
+        STATE.meta.savedAt = savedAt;
+        await safeSet("meta-key-wf", STATE.meta);
+        const putRes = await fetch(BRIDGE_URL, {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({profile:STATE.profile, goals:STATE.goals, meta:STATE.meta, savedAt})
+        });
+        if(!putRes.ok) throw new Error("bridge rejected the save");
+        alert("Exported your current data to disk.");
+      }
+    }catch(e){
+      alert("Couldn't reach the local sync bridge on 127.0.0.1:8765. Make sure wayfinder_bridge.py is running, then try again.");
+      console.error(e);
+    }
+    render();
+  }
+
+  function renderRail(dayBlocks, profile){
+    const rail = el("div","rail","<h3>Today's shape</h3>");
+    const arc = el("div","arc");
+    dayBlocks.forEach(b=>{
+      if(b.kind==="marker"){
+        const row = el("div","arc-block fixed", `<span class="time">${fmt12(b.start)}</span><span class="label">${b.label}</span>`);
+        arc.appendChild(row);
+        return;
+      }
+      const cls = b.kind==="fixed" ? "fixed" : (b.kind==="high" ? "high" : (b.kind==="low" ? "low" : ""));
+      const row = el("div","arc-block "+cls, `<span class="dot"></span><span class="time">${fmt12(b.start)}${b.start!==b.end ? "–"+fmt12(b.end):""}</span><span class="label">${b.label}</span>`);
+      arc.appendChild(row);
+    });
+    rail.appendChild(arc);
+    return rail;
+  }
+
+  function renderTiers(goals, profile){
+    const wrap = el("div","tiers");
+    ["Primary","Secondary","Tertiary"].forEach(tier=>{
+      const tierGoals = goals.filter(g=>g.tier===tier);
+      const block = el("div","tier-block "+tier);
+      block.innerHTML = `<h2><span class="tier-swatch"></span>${tier}<span class="tier-note">${profile.reminderRules[tier]}</span></h2>`;
+      if(tierGoals.length===0){
+        block.appendChild(el("div","empty","No "+tier.toLowerCase()+" goals yet."));
+      } else {
+        tierGoals.forEach(g=>block.appendChild(renderGoalCard(g, profile, goals)));
+      }
+      wrap.appendChild(block);
+    });
+    const addRow = el("div","add-row", '<button id="addGoalBtn" class="primary-btn">Add a goal</button>');
+    wrap.appendChild(addRow);
+    setTimeout(()=>{ const b=document.getElementById("addGoalBtn"); if(b) b.addEventListener("click", ()=>openGoalModal()); },0);
+    return wrap;
+  }
+
+  function renderGoalCard(g, profile, goals){
+    const isDone = g.status==="completed";
+    const nextStep = g.framework[g.current_step_index];
+    const card = el("div","goal-card"+(isDone?" completed":""));
+    const pb = g.preferred_time_block ? fmt12(g.preferred_time_block.start)+"–"+fmt12(g.preferred_time_block.end) : "No time set";
+    card.innerHTML = `
+      <div class="row1">
+        <h4>${escapeHtml(g.goal_name)}</h4>
+        ${isDone ? '<span class="status-done">Completed</span>' : ''}
+      </div>
+      <div class="next">${isDone ? "All "+g.framework.length+" steps complete." : "Next: "+escapeHtml(nextStep)}</div>
+      <div class="meta">
+        <span>Step ${Math.min(g.current_step_index+1,g.framework.length)} of ${g.framework.length}</span>
+        <span>${pb}</span>
+      </div>
+      <div class="actions"></div>
+    `;
+    const actions = card.querySelector(".actions");
+    if(!isDone){
+      const doneBtn = document.createElement("button");
+      doneBtn.textContent = "Mark step complete";
+      doneBtn.addEventListener("click", async ()=>{ await completeStep(g.goal_id); });
+      actions.appendChild(doneBtn);
+
+      const suggestBtn = document.createElement("button");
+      suggestBtn.textContent = "Suggest time";
+      suggestBtn.className = "text-btn";
+      suggestBtn.addEventListener("click", async ()=>{
+        const w = suggestWindow(g.tier, profile, goals.filter(x=>x.goal_id!==g.goal_id));
+        if(w){ g.preferred_time_block = w; g.last_updated_ts = new Date().toISOString(); await safeSet("goals-key-wf", STATE.goals); render(); }
+        else alert("Couldn't find a free window that fits without a conflict — needs manual review.");
+      });
+      actions.appendChild(suggestBtn);
+    }
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.className = "text-btn";
+    editBtn.addEventListener("click", ()=>openGoalModal(g));
+    actions.appendChild(editBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "Delete";
+    deleteBtn.className = "text-btn";
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!confirm('Delete "'+g.goal_name+'"? This removes its whole history.')) return;
+      STATE.goals = STATE.goals.filter(x=>x.goal_id!==g.goal_id);
+      await safeSet("goals-key-wf", STATE.goals);
+      render();
+    });
+    actions.appendChild(deleteBtn);
+    return card;
+  }
+
+  async function completeStep(goalId){
+    const g = STATE.goals.find(x=>x.goal_id===goalId);
+    if(!g) return;
+    g.milestone_log.push({step:g.current_step_index, completed_ts:todayStr()});
+    g.current_step_index += 1;
+    if(g.current_step_index >= g.framework.length) g.status = "completed";
+    g.last_updated_ts = new Date().toISOString();
+    await safeSet("goals-key-wf", STATE.goals);
+    render();
+  }
+
+  function openGoalModal(existingGoal){
+    const isEdit = !!existingGoal;
+    const back = el("div","modal-back");
+    const modal = el("div","modal");
+    const stepsText = isEdit ? existingGoal.framework.join("\n") : "";
+    const start = isEdit && existingGoal.preferred_time_block ? existingGoal.preferred_time_block.start : "09:00";
+    const end = isEdit && existingGoal.preferred_time_block ? existingGoal.preferred_time_block.end : "09:45";
+    modal.innerHTML = `
+      <h2>${isEdit ? "Edit goal" : "Add a goal"}</h2>
+      <div class="field"><label>Goal name</label><input id="gName" placeholder="e.g. Read 12 books this year" value="${isEdit ? escapeHtml(existingGoal.goal_name) : ''}"/></div>
+      <div class="field"><label>Priority tier</label>
+        <select id="gTier">
+          <option ${isEdit && existingGoal.tier==='Primary' ? 'selected':''}>Primary</option>
+          <option ${isEdit && existingGoal.tier==='Secondary' ? 'selected':''}>Secondary</option>
+          <option ${isEdit && existingGoal.tier==='Tertiary' ? 'selected':''}>Tertiary</option>
+        </select>
+      </div>
+      <div class="field"><label>Framework steps (one per line)</label><textarea id="gSteps" placeholder="Step one&#10;Step two&#10;Step three">${escapeHtml(stepsText)}</textarea></div>
+      <div class="two-col">
+        <div class="field"><label>Preferred start</label><input id="gStart" type="time" value="${start}"/></div>
+        <div class="field"><label>Preferred end</label><input id="gEnd" type="time" value="${end}"/></div>
+      </div>
+      ${isEdit ? '<div class="field"><label>Status</label><select id="gStatus"><option value="active" '+(existingGoal.status==='active'?'selected':'')+'>Active</option><option value="paused" '+(existingGoal.status==='paused'?'selected':'')+'>Paused</option><option value="completed" '+(existingGoal.status==='completed'?'selected':'')+'>Completed</option></select></div>' : ''}
+      <div class="btn-row">
+        <button class="text-btn" id="cancelAdd">Cancel</button>
+        <button class="primary-btn" id="saveAdd">${isEdit ? "Save changes" : "Save goal"}</button>
+      </div>
+    `;
+    back.appendChild(modal);
+    document.body.appendChild(back);
+    document.getElementById("cancelAdd").addEventListener("click", ()=>back.remove());
+    document.getElementById("saveAdd").addEventListener("click", async ()=>{
+      const name = document.getElementById("gName").value.trim();
+      const tier = document.getElementById("gTier").value;
+      const steps = document.getElementById("gSteps").value.split("\n").map(s=>s.trim()).filter(Boolean);
+      const start = document.getElementById("gStart").value;
+      const end = document.getElementById("gEnd").value;
+      if(!name || steps.length===0){ alert("Give the goal a name and at least one framework step."); return; }
+
+      if(isEdit){
+        existingGoal.goal_name = name;
+        existingGoal.tier = tier;
+        existingGoal.framework = steps;
+        existingGoal.preferred_time_block = {start, end};
+        existingGoal.current_step_index = Math.min(existingGoal.current_step_index, steps.length);
+        const statusSel = document.getElementById("gStatus");
+        existingGoal.status = statusSel ? statusSel.value : existingGoal.status;
+        if(existingGoal.current_step_index >= steps.length && existingGoal.status==="active"){
+          existingGoal.status = "completed";
+        }
+        existingGoal.last_updated_ts = new Date().toISOString();
+      } else {
+        const newGoal = {
+          goal_id: cryptoId(), goal_name:name, tier, status:"active",
+          framework: steps, current_step_index:0,
+          preferred_time_block: {start, end},
+          milestone_log: [], last_updated_ts: new Date().toISOString()
+        };
+        STATE.goals.push(newGoal);
+      }
+      await safeSet("goals-key-wf", STATE.goals);
+      back.remove();
+      render();
+    });
+  }
+
+  function openProfileModal(){
+    const p = STATE.profile;
+    const back = el("div","modal-back");
+    const modal = el("div","modal");
+    modal.innerHTML = `
+      <h2>Onboarding profile</h2>
+      <div class="two-col">
+        <div class="field"><label>Wake</label><input id="pWake" type="time" value="${p.wake}"/></div>
+        <div class="field"><label>Sleep</label><input id="pSleep" type="time" value="${p.sleep}"/></div>
+      </div>
+      <div class="field"><label>High energy window</label>
+        <div class="two-col">
+          <input id="pHeStart" type="time" value="${p.highEnergyStart}"/>
+          <input id="pHeEnd" type="time" value="${p.highEnergyEnd}"/>
+        </div>
+      </div>
+      <div class="field"><label>Lunch time (used for post-lunch dip)</label><input id="pLunch" type="time" value="${p.meals.lunch}"/></div>
+      <div class="field"><label>Weekday working hours (no-go window)</label>
+        <div class="two-col">
+          <input id="pWhStart" type="time" value="${p.workingHours.start}"/>
+          <input id="pWhEnd" type="time" value="${p.workingHours.end}"/>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="text-btn" id="cancelProfile">Cancel</button>
+        <button class="primary-btn" id="saveProfile">Save changes</button>
+      </div>
+    `;
+    back.appendChild(modal);
+    document.body.appendChild(back);
+    document.getElementById("cancelProfile").addEventListener("click", ()=>back.remove());
+    document.getElementById("saveProfile").addEventListener("click", async ()=>{
+      p.wake = document.getElementById("pWake").value;
+      p.sleep = document.getElementById("pSleep").value;
+      p.highEnergyStart = document.getElementById("pHeStart").value;
+      p.highEnergyEnd = document.getElementById("pHeEnd").value;
+      p.meals.lunch = document.getElementById("pLunch").value;
+      p.workingHours.start = document.getElementById("pWhStart").value;
+      p.workingHours.end = document.getElementById("pWhEnd").value;
+      await safeSet("profile-key-wf", p);
+      back.remove();
+      render();
+    });
+  }
+
+  function el(tag, cls, html){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(html!==undefined) e.innerHTML = html;
+    return e;
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  (async function init(){
+    try{
+      STATE = await loadState();
+      render();
+    }catch(e){
+      document.getElementById("app").innerHTML = "<p>Wayfinder couldn't load its saved state. Reloading may help.</p>";
+      console.error(e);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
